@@ -93,7 +93,7 @@ class UssdAccessibilityService : AccessibilityService() {
         // دون أي تسليم لها - راجع handleCandidateFinalText لتفاصيل الآلية. القيمة هنا فيها هامش
         // أمان فوق الـ2 ثانية المُلاحَظة ميدانياً؛ عدّلوها لاحقاً حسب اختبارات ميدانية إضافية إن
         // ظهرت حالات أبطأ من هذا (مثلاً شبكة أضعف).
-        const val FINALIZE_SETTLE_MS = 2500L
+        const val FINALIZE_SETTLE_MS = 1000L
     }
 
     // حالة "المرشّح النهائي" الحالي بانتظار الاستقرار - راجع handleCandidateFinalText
@@ -219,6 +219,13 @@ class UssdAccessibilityService : AccessibilityService() {
 
         if (isSystemMessage || isLoadingProgress) {
             ActivityLog.add("تم تجاهل نافذة تحميل مؤقتة بانتظار الرد الفعلي من الشبكة.")
+            if (isSystemMessage) {
+                val dismissBtn = findDismissButton(root)
+                if (dismissBtn != null) {
+                    val clicked = dismissBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if (clicked) ActivityLog.add("تم إغلاق رسالة النظام العابرة تلقائياً")
+                }
+            }
             return 
         }
 
