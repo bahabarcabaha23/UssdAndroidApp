@@ -1,0 +1,196 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.ussdcompanion.app"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:4:5-67
+11-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.READ_SMS" />
+12-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:5:5-67
+12-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:5:22-64
+13    <uses-permission android:name="android.permission.CALL_PHONE" />
+13-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:6:5-69
+13-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:6:22-66
+14    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+14-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:7:5-75
+14-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:7:22-72
+15    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+15-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:8:5-77
+15-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:8:22-74
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+16-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:9:5-77
+16-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:9:22-74
+17    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+17-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:10:5-77
+17-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:10:22-74
+18    <!-- 🆕 أندرويد 14: مطلوب مع foregroundServiceType="specialUse" أدناه على HttpServerService -->
+19    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+19-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:12:5-89
+19-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:12:22-86
+20    <!-- 🆕 لزر استثناء التطبيق من تحسين البطارية (مهم على سامسونج/One UI) -->
+21    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+21-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:14:5-95
+21-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:14:22-92
+22
+23    <permission
+23-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+24        android:name="com.ussdcompanion.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+24-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+25        android:protectionLevel="signature" />
+25-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+26
+27    <uses-permission android:name="com.ussdcompanion.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+27-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+27-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+28
+29    <application
+29-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:16:5-58:19
+30        android:allowBackup="false"
+30-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:17:9-36
+31        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+31-->[androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\7fc1c5f99a032c0bd7f2118ab10bc1d4\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+32        android:debuggable="true"
+33        android:extractNativeLibs="false"
+34        android:icon="@android:drawable/sym_def_app_icon"
+34-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:18:9-58
+35        android:label="USSD Companion"
+35-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:19:9-39
+36        android:theme="@style/Theme.UssdCompanion" >
+36-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:20:9-51
+37        <activity
+37-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:22:9-29:20
+38            android:name="com.ussdcompanion.app.MainActivity"
+38-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:23:13-41
+39            android:exported="true" >
+39-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:24:13-36
+40            <intent-filter>
+40-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:25:13-28:29
+41                <action android:name="android.intent.action.MAIN" />
+41-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:26:17-69
+41-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:26:25-66
+42
+43                <category android:name="android.intent.category.LAUNCHER" />
+43-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:27:17-77
+43-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:27:27-74
+44            </intent-filter>
+45        </activity>
+46
+47        <service
+47-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:31:9-41:19
+48            android:name="com.ussdcompanion.app.UssdAccessibilityService"
+48-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:32:13-53
+49            android:exported="true"
+49-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:33:13-36
+50            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" >
+50-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:34:13-79
+51            <intent-filter>
+51-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:35:13-37:29
+52                <action android:name="android.accessibilityservice.AccessibilityService" />
+52-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:36:17-92
+52-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:36:25-89
+53            </intent-filter>
+54
+55            <meta-data
+55-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:38:13-40:72
+56                android:name="android.accessibilityservice"
+56-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:39:17-60
+57                android:resource="@xml/accessibility_service_config" />
+57-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:40:17-69
+58        </service>
+59
+60        <!--
+61            🆕 أندرويد 14 (targetSdk 34): يلزم تحديد foregroundServiceType. اخترنا "specialUse"
+62            لأن هذه الخدمة (جسر HTTP محلي يتحكم فيه برنامج C# عبر adb forward) لا تندرج تحت أي
+63            نوع قياسي (ليست dataSync سحابي تقليدي، ولا media/location/camera). خاصية
+64            PROPERTY_SPECIAL_USE_FGS_SUBTYPE إلزامية مع هذا النوع منذ API 34.
+65        -->
+66        <service
+66-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:49:9-56:19
+67            android:name="com.ussdcompanion.app.HttpServerService"
+67-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:50:13-46
+68            android:exported="false"
+68-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:51:13-37
+69            android:foregroundServiceType="specialUse" >
+69-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:52:13-55
+70            <property
+70-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:53:13-55:80
+71                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+71-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:54:17-76
+72                android:value="local-http-bridge-controlled-via-adb-forward" />
+72-->C:\Users\HP\Music\projet android\UssdAndroid-main (23 08 2026)\ussd-companion\app\src\main\AndroidManifest.xml:55:17-77
+73        </service>
+74
+75        <provider
+75-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+76            android:name="androidx.startup.InitializationProvider"
+76-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+77            android:authorities="com.ussdcompanion.app.androidx-startup"
+77-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+78            android:exported="false" >
+78-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+79            <meta-data
+79-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+80                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+80-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+81                android:value="androidx.startup" />
+81-->[androidx.emoji2:emoji2:1.2.0] C:\Users\HP\.gradle\caches\transforms-4\060f0fd689278fd76e43221f0005ff51\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+82            <meta-data
+82-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\HP\.gradle\caches\transforms-4\ee9047605cc8b07682d617f17936f880\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
+83                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+83-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\HP\.gradle\caches\transforms-4\ee9047605cc8b07682d617f17936f880\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
+84                android:value="androidx.startup" />
+84-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\HP\.gradle\caches\transforms-4\ee9047605cc8b07682d617f17936f880\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
+85            <meta-data
+85-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+86                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+86-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+87                android:value="androidx.startup" />
+87-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+88        </provider>
+89
+90        <receiver
+90-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+91            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+91-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+92            android:directBootAware="false"
+92-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+93            android:enabled="true"
+93-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+94            android:exported="true"
+94-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+95            android:permission="android.permission.DUMP" >
+95-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+96            <intent-filter>
+96-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+97                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+97-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+97-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+98            </intent-filter>
+99            <intent-filter>
+99-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+100                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+100-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+100-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+101            </intent-filter>
+102            <intent-filter>
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+103                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+103-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+103-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+104            </intent-filter>
+105            <intent-filter>
+105-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+106                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\e12a253fcab1e8e8c3a697975ad69ffd\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+107            </intent-filter>
+108        </receiver>
+109    </application>
+110
+111</manifest>

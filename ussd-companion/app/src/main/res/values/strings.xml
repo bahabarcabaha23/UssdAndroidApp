@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">USSD Companion</string>
+    <string name="accessibility_service_description">تُستخدم لقراءة الرد الظاهر في نافذة USSD والتفاعل معه فقط (مثل قوائم الشحن والتحقق من الرصيد). لا تُستخدم لقراءة أي تطبيق آخر.</string>
+</resources>

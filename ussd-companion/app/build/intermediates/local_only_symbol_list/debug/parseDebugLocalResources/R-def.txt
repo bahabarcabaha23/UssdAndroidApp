@@ -1,0 +1,21 @@
+R_DEF: Internal format may change without notice
+local
+id btnClearLog
+id btnEnableAccessibility
+id btnGrantCallPermission
+id btnGrantSms
+id btnIgnoreBatteryOptimization
+id btnSave
+id editApiKey
+id editPort
+id logView
+id statusAccessibility
+id statusBattery
+id statusCallPermission
+id statusServer
+id statusSms
+layout activity_main
+string accessibility_service_description
+string app_name
+style Theme.UssdCompanion
+xml accessibility_service_config

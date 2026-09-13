@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="USSD Companion"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/statusServer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="حالة الخادم: ..."
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/statusAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="حالة خدمة الوصول: ..."
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/statusSms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="إذن الرسائل: ..."
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/btnEnableAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="فتح إعدادات تسهيلات الوصول"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnGrantSms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="منح إذن قراءة الرسائل"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:id="@+id/statusCallPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="إذن الاتصال وتحديد الشريحة: ..."
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnGrantCallPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="منح أذونات الاتصال بالهاتف"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 🆕 استثناء تحسين البطارية (One UI/سامسونج خصوصاً) -->
+        <TextView
+            android:id="@+id/statusBattery"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="استثناء تحسين البطارية: ..."
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnIgnoreBatteryOptimization"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="استثناء التطبيق من تحسين البطارية"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="مفتاح API (يجب أن يطابق الكمبيوتر):"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/editApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="مثال: my-secret-key-123"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="المنفذ المحلي:"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/editPort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:hint="8080"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="حفظ وإعادة تشغيل الخادم"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="سجل الأحداث:"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <Button
+            android:id="@+id/btnClearLog"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="مسح السجل"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/logView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:text="" />
+
+    </LinearLayout>
+</ScrollView>
