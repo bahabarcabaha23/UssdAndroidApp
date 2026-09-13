@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
@@ -30,13 +32,18 @@ class UssdAccessibilityService : AccessibilityService() {
             "android:id/button1", "android:id/button2", "android:id/button3"
         )
 
-        // الكلمات المفتاحية لتجاهل نوافذ تحميل الأندرويد وأخطاء MMI المؤقتة
+        // الكلمات المفتاحية لتجاهل نوافذ تحميل الأندرويد المؤقتة
         private val IGNORED_SYSTEM_MESSAGES = listOf(
             "ussd code running",
             "exécution du code ussd",
             "execution du code ussd",
             "رمز ussd قيد التشغيل",
             "يتم تشغيل رمز ussd",
+            // 🆕 رسائل شبكة عابرة حقيقية (مشاكل اتصال مؤقتة تُعقَب عادة بمحاولة تلقائية من الشبكة
+            // نفسها خلال ثوانٍ) - بلا أي نقر أو إغلاق تلقائي، فقط تُسجَّل ويُستمر بالانتظار (تماماً
+            // كنوافذ التحميل)، ومهلة PENDING الحالية (30 ثانية) تبقى صمام الأمان النهائي إن لم يصل
+            // أي رد فعلي بعدها. ⚠️ هذه منفصلة تماماً عن مشكلة "لا يوجد عرض لهذا الرقم" (تلك تُعالَج
+            // عبر FINALIZE_SETTLE_MS أدناه لأنها نص نهائي المظهر وليست رسالة خطأ معروفة).
             "problème de connexion",
             "probleme de connexion",
             "code ihm non valide",
@@ -77,10 +84,23 @@ class UssdAccessibilityService : AccessibilityService() {
         private val lastUnmatchedPackageLogTime = ConcurrentHashMap<String, Long>()
         private const val UNMATCHED_PACKAGE_LOG_THROTTLE_MS = 5_000L
 
-        private const val FINALIZE_SETTLE_MS = 2500L
-        private var settleTimerTask: java.util.TimerTask? = null
-        private var lastObservedText: String? = null
+        // 🆕 إصلاح: مهلة استقرار قبل اعتماد أي نص كـ"رد USSD نهائي" فعلي. لوحظ ميدانياً (سجل
+        // مستخدم، عملية "جلب العروض") أن بعض تدفقات الشبكة تُظهر نصاً أولياً فورياً بلا أي مؤشر
+        // تحميل (مثل "لا يوجد عرض لهذا الرقم...")، ثم تستبدله فعلياً بعد ~1-2 ثانية بالرد الحقيقي
+        // عبر تحديث محتوى نفس النافذة (TYPE_WINDOW_CONTENT_CHANGED). الاعتماد الفوري على أول نص
+        // بلا مؤشر تحميل كان يجعل البرنامج (C#) يقرأ النص الأولي الخاطئ ويُنهي الجلسة (بما فيه
+        // استدعاء /ussd/dismiss) قبل وصول الرد الحقيقي، فتظهر النتيجة الفعلية على شاشة الهاتف فقط
+        // دون أي تسليم لها - راجع handleCandidateFinalText لتفاصيل الآلية. القيمة هنا فيها هامش
+        // أمان فوق الـ2 ثانية المُلاحَظة ميدانياً؛ عدّلوها لاحقاً حسب اختبارات ميدانية إضافية إن
+        // ظهرت حالات أبطأ من هذا (مثلاً شبكة أضعف).
+        const val FINALIZE_SETTLE_MS = 2500L
     }
+
+    // حالة "المرشّح النهائي" الحالي بانتظار الاستقرار - راجع handleCandidateFinalText
+    @Volatile private var candidateFinalText: String? = null
+    @Volatile private var candidateFinalRequestId: String? = null
+    @Volatile private var candidateFinalFirstSeenAt: Long = 0L
+    private val settleHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -88,17 +108,29 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        settleHandler.removeCallbacksAndMessages(null)
         instance = null
         super.onDestroy()
     }
 
-    fun performPendingActionsDirectly() {
+    /**
+     * @return true إن لم يكن هناك طلب إغلاق معلّق أصلاً، أو تم إغلاق الحوار فعلاً (بنقر ناجح أو
+     * لأنه لم يعد ظاهراً أصلاً - أي أُغلق مسبقاً). false فقط حين طُلب الإغلاق صراحة ولا يزال هناك
+     * حوار USSD/اتصال ظاهر فعلياً على الشاشة ولم يُعثر على أي زر مناسب فيه - هذه هي الحالة الوحيدة
+     * التي يستحق فيها المتصل (HttpServerService → androidPhoneService.ts) اللجوء لبديل خارجي
+     * (كضغط زر الرجوع عبر ADB). بلا هذا التمييز، أي طلب /ussd/dismiss يصل بعد إغلاق ناجح تلقائي
+     * (عبر finalizeUssdResponse مثلاً) سيُقرأ خطأً كـ"فشل" لمجرد عدم وجود أي زر ليُنقر عليه بعد
+     * الآن - رغم أن الجلسة أُغلقت بنجاح فعلاً - فيُفعَّل بديل ADB بلا داعٍ في كل عملية ناجحة.
+     */
+    fun performPendingActionsDirectly(): Boolean {
         val root = rootInActiveWindow
         if (root == null) {
             ActivityLog.add("[إدخال] فشل: لا توجد نافذة نشطة (rootInActiveWindow == null)")
-            return
+            // لا يمكن التأكد من أي شيء بلا نافذة نشطة - نُبقي الاحتمال مفتوحاً لبديل خارجي فقط
+            // إن كان هناك فعلاً طلب إغلاق معلّق (وإلا لا داعي لإخبار المتصل بأي "فشل").
+            return !UssdSessionState.dismissRequested
         }
-        applyPendingActions(root)
+        return applyPendingActions(root)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -186,7 +218,7 @@ class UssdAccessibilityService : AccessibilityService() {
         val isLoadingProgress = hasProgressIndicator(root)
 
         if (isSystemMessage || isLoadingProgress) {
-            ActivityLog.add("تم تجاهل نافذة نظام مؤقتة بانتظار الرد الفعلي من الشبكة: $text")
+            ActivityLog.add("تم تجاهل نافذة تحميل مؤقتة بانتظار الرد الفعلي من الشبكة.")
             return 
         }
 
@@ -224,19 +256,90 @@ class UssdAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // نهائي - لكن نطبق مهلة الاستقرار للرسائل الشرعية المؤقتة (مثل "لا يوجد عرض")
-            if (lastObservedText != text) {
-                lastObservedText = text
-                settleTimerTask?.cancel()
-                settleTimerTask = kotlin.concurrent.timerTask {
-                    if (UssdSessionState.currentRequestId != null) {
-                        UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
-                        ActivityLog.add("رد USSD (نهائي بعد الاستقرار): $text")
-                    }
-                }
-                java.util.Timer().schedule(settleTimerTask, FINALIZE_SETTLE_MS)
-                ActivityLog.add("رد USSD (بانتظار الاستقرار): $text")
-            }
+            // 🆕 مرشّح نهائي فقط - لا نعتمده فوراً ولا نُغلق النافذة الآن. راجع التوثيق أعلى
+            // handleCandidateFinalText: قد يكون هذا النص أولياً مؤقتاً سيُستبدل خلال لحظات
+            // بالرد الحقيقي (لوحظ ميدانياً في تدفق "جلب العروض").
+            handleCandidateFinalText(text)
+        }
+    }
+
+    // =========================================================
+    // 🆕 إصلاح: إنهاء متسرّع لجلسة USSD قبل استقرار النص الحقيقي
+    // =========================================================
+    // خلفية المشكلة (من سجل أحداث مستخدم فعلي، عملية "جلب العروض"): فور إرسال كود USSD، ظهرت
+    // نافذة النظام بنص فوري ("لا يوجد عرض لهذا الرقم...") بلا أي ProgressBar وبلا أي عبارة من
+    // IGNORED_SYSTEM_MESSAGES، فاعتمده المنطق القديم فوراً كرد "نهائي" وأغلق النافذة. لكن بعد
+    // نحو 1-2 ثانية، استُبدل هذا النص فعلياً بالعروض الحقيقية عبر تحديث محتوى النافذة. بما أن
+    // الجلسة كانت قد أُنهيت (وربما استُدعي /ussd/dismiss/ من C# بعدها فوراً)، فإن
+    // onAccessibilityEvent يتجاهل ذلك التحديث اللاحق تماماً (`if (status == IDLE) return`)،
+    // فتظهر العروض الحقيقية على شاشة الهاتف فقط دون أي وصول للبرنامج.
+    //
+    // الحل: لا يُعتمَد أي نص كـ"نهائي" فور ظهوره، بل يُسجَّل كـ"مرشّح" وتُمنح له مهلة استقرار
+    // (FINALIZE_SETTLE_MS) دون أي إنهاء للجلسة أو نقر تلقائي على زر الإغلاق خلالها:
+    //   - إن وصل نص مختلف قبل انتهاء المهلة (تحديث حقيقي جديد)، يُعاد ضبط المهلة على النص
+    //     الجديد فوراً ولا شيء يُفقَد.
+    //   - فقط إن بقي نفس النص مستقراً طوال المهلة كاملة، يُعتمَد كرد نهائي فعلي وتُغلق النافذة.
+    // الأثر الجانبي المقصود: كل رد USSD يتأخر تسليمه بمقدار المهلة تقريباً - تكلفة مقبولة مقابل
+    // تفادي فقدان الرد الحقيقي بالكامل.
+    private fun handleCandidateFinalText(text: String) {
+        val requestId = UssdSessionState.currentRequestId
+        val now = System.currentTimeMillis()
+
+        if (text != candidateFinalText || requestId != candidateFinalRequestId) {
+            candidateFinalText = text
+            candidateFinalRequestId = requestId
+            candidateFinalFirstSeenAt = now
+            ActivityLog.add("رد USSD (مرشّح - بانتظار استقرار ${FINALIZE_SETTLE_MS / 1000.0} ث): $text")
+            settleHandler.removeCallbacksAndMessages(null)
+            settleHandler.postDelayed({ recheckCandidateFinal(text, requestId) }, FINALIZE_SETTLE_MS)
+            return
+        }
+
+        // نفس النص وصل مجدداً لنفس الجلسة، والمهلة انقضت فعلاً (مثلاً وصل حدث إضافي بعد انتهاء
+        // المهلة المجدوَلة أصلاً) - اعتمده نهائياً الآن دون انتظار postDelayed لا لزوم له.
+        if (now - candidateFinalFirstSeenAt >= FINALIZE_SETTLE_MS) {
+            finalizeUssdResponse(text)
+        }
+    }
+
+    /** يُنفَّذ بعد FINALIZE_SETTLE_MS من ظهور نص "مرشّح" لأول مرة، للتحقق من استقراره فعلاً قبل اعتماده. */
+    private fun recheckCandidateFinal(expectedText: String, expectedRequestId: String?) {
+        if (UssdSessionState.currentRequestId != expectedRequestId) return
+        // 🆕 إن انتقلت الجلسة فعلاً لانتظار إدخال حقيقي (مثلاً قائمة عروض وصلت بعد النص الوسيط
+        // الخاطئ - راجع الحالة الموثّقة ميدانياً: نص "لا يوجد عرض" يليه حوار عروض حقيقي بحقل
+        // إدخال)، يجب عدم الكتابة فوقها بالمرشّح القديم المنتهي الصلاحية إطلاقاً.
+        if (UssdSessionState.status == UssdSessionState.STATUS_COMPLETED ||
+            UssdSessionState.status == UssdSessionState.STATUS_WAITING_SMS_BALANCE ||
+            UssdSessionState.status == UssdSessionState.STATUS_WAITING_USER_INPUT ||
+            UssdSessionState.status == UssdSessionState.STATUS_IDLE
+        ) return
+        // المرشّح تغيّر بالفعل (وصل تحديث حقيقي جديد استبدله) - له مهلته الخاصة المجدوَلة من
+        // handleCandidateFinalText أصلاً؛ لا شيء نفعله هنا.
+        if (candidateFinalText != expectedText || candidateFinalRequestId != expectedRequestId) return
+
+        val root = rootInActiveWindow ?: return
+        val currentText = StringBuilder().also { collectText(root, it) }.toString().trim()
+        if (currentText == expectedText) {
+            finalizeUssdResponse(expectedText)
+        }
+        // إن اختلف النص الحالي عن المتوقَّع، فهذا يعني أن حدث تغيّر محتوى وصل فعلاً وأعاد ضبط
+        // مرشّح جديد من مساره الطبيعي في onAccessibilityEvent - لا حاجة لفعل شيء هنا.
+    }
+
+    private fun finalizeUssdResponse(text: String) {
+        candidateFinalText = null
+        candidateFinalRequestId = null
+
+        UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
+        ActivityLog.add("رد USSD (نهائي): $text")
+
+        val root = rootInActiveWindow
+        val dismissButton = root?.let { findDismissButton(it) }
+        if (dismissButton != null) {
+            val clicked = dismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً" else "تعذّر النقر التلقائي على زر الإغلاق")
+        } else {
+            ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
         }
     }
 
@@ -316,7 +419,8 @@ class UssdAccessibilityService : AccessibilityService() {
         return "${match.groupValues[1]} ${match.groupValues[2].uppercase()}"
     }
 
-    private fun applyPendingActions(root: AccessibilityNodeInfo) {
+    /** @return انظر توثيق [performPendingActionsDirectly] لمعنى القيمة المُعادة بدقة. */
+    private fun applyPendingActions(root: AccessibilityNodeInfo): Boolean {
         val toSend = UssdSessionState.pendingInputToSend.getAndSet(null)
         if (toSend != null) {
             val field = findEditText(root)
@@ -347,12 +451,24 @@ class UssdAccessibilityService : AccessibilityService() {
             }
         }
 
-        if (UssdSessionState.dismissRequested) {
+        if (!UssdSessionState.dismissRequested) return true
+
+        // 🆕 التمييز الحاسم: هل لا تزال هناك نافذة USSD/اتصال ظاهرة فعلياً تستحق إغلاقاً، أم أن
+        // الشاشة انتقلت أصلاً لشيء آخر (غالباً لأن الحوار أُغلق بنجاح مسبقاً عبر finalizeUssdResponse
+        // التلقائي)؟ إن لم يعد هناك حوار من هذا النوع أصلاً، هذا "نجاح" وليس "فشل" - رغم عدم وجود
+        // أي زر لنقره الآن - فلا يجدر إخبار المتصل (TS/C#) بفشل يدفعه للجوء لبديل ADB بلا داعٍ.
+        val stillOnTelephonyDialog = isTelephonyRelatedWindow(root, root.packageName?.toString()?.lowercase() ?: "")
+        val dismissedSuccessfully = if (!stillOnTelephonyDialog) {
+            ActivityLog.add("طلب إغلاق: لا يوجد حوار USSD ظاهر حالياً - اعتُبر مُغلقاً بالفعل")
+            true
+        } else {
             val closeBtn = findDismissButton(root)
             val clicked = closeBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
             ActivityLog.add(if (clicked) "تم إغلاق حوار USSD بطلب من البرنامج" else "طلب إغلاق لكن لم يُعثر على زر مناسب")
-            UssdSessionState.reset()
+            clicked
         }
+        UssdSessionState.reset()
+        return dismissedSuccessfully
     }
 
     // 🟢 التحقق المادي من وجود مؤشر تحميل (ProgressBar)
@@ -366,15 +482,7 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     private fun findDismissButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        // 1. البحث أولاً عن زر الإلغاء/الإغلاق بالنص الصريح (Annuler, Cancel, OK, إلغاء...)
-        findButtonByText(root, DISMISS_BUTTON_TEXTS)?.let { return it }
-
-        // 2. البحث باستخدام contentDescription (لبعض أجهزة ColorOS)
-        findButtonByContentDescription(root, DISMISS_BUTTON_TEXTS)?.let { return it }
-
-        // 3. فحص معرفات الأزرار النظامية مع تقديم الزر السلبي BUTTON_NEGATIVE (button2) على BUTTON_POSITIVE (button1)
-        val prioritizedButtonIds = listOf("android:id/button2", "android:id/button3", "android:id/button1")
-        for (viewId in prioritizedButtonIds) {
+        for (viewId in STANDARD_DIALOG_BUTTON_IDS) {
             val found = try {
                 root.findAccessibilityNodeInfosByViewId(viewId)?.firstOrNull { it.isEnabled }
             } catch (e: Exception) {
@@ -382,6 +490,8 @@ class UssdAccessibilityService : AccessibilityService() {
             }
             if (found != null) return found
         }
+
+        findButtonByText(root, DISMISS_BUTTON_TEXTS)?.let { return it }
 
         val buttons = mutableListOf<AccessibilityNodeInfo>()
         collectButtons(root, buttons)
@@ -422,17 +532,6 @@ class UssdAccessibilityService : AccessibilityService() {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val found = findButtonByText(child, options)
-            if (found != null) return found
-        }
-        return null
-    }
-
-    private fun findButtonByContentDescription(node: AccessibilityNodeInfo, options: List<String>): AccessibilityNodeInfo? {
-        val desc = node.contentDescription?.toString()
-        if (desc != null && options.any { desc.equals(it, ignoreCase = true) }) return node
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val found = findButtonByContentDescription(child, options)
             if (found != null) return found
         }
         return null

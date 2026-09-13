@@ -199,18 +199,29 @@ class HttpServerService : Service() {
             val json = JSONObject()
                 .put("status", UssdSessionState.status)
                 .put("message", UssdSessionState.message)
-            // لا نمسح الحالة هنا — نترك السيرفر (TypeScript) يقرر متى ينهي الجلسة
-            // عبر /ussd/dismiss حتى لا تُفقد الرسالة بين عدة استقصاءات polling متتالية
+            // 🟢 لا نمسح الحالة هنا فور أول قراءة (كما كان سابقاً). التحرير الفعلي أصبح مسؤولية
+            // استدعاء /ussd/dismiss الصريح فقط - هذا يمنع فقدان الرد لو ضاعت استجابة HTTP لهذه
+            // القراءة تحديداً في الشبكة (مثلاً انقطاع مؤقت بين adb forward والخادم الخارجي)
+            // وأُعيدت محاولة القراءة بنفس requestId بعدها.
             return jsonResponse(Response.Status.OK, json)
         }
 
        private fun handleUssdDismiss(): Response {
             UssdSessionState.dismissRequested = true
-            
-            // 🟢 إجبار خدمة الوصول على تنفيذ أمر الإغلاق فوراً دون انتظار تغير الشاشة
-            UssdAccessibilityService.instance?.performPendingActionsDirectly()
-            
-            return jsonResponse(Response.Status.OK, JSONObject().put("ok", true))
+
+            // 🟢 إجبار خدمة الوصول على تنفيذ أمر الإغلاق فوراً دون انتظار تغير الشاشة. نمرر نتيجة
+            // الإغلاق الفعلية (dismissedCleanly) للطرف الخارجي (androidPhoneService.ts) بدل الاكتفاء
+            // بـ"ok: true" ثابتة - بلا هذا، كان ذلك الطرف يلجأ دائماً (بلا شرط) لبديل ADB خارجي
+            // (ضغط زر الرجوع) حتى في الحالات الناجحة تماماً، وهذا هو ما كان يُغلق تطبيقات/نوافذ
+            // أخرى مفتوحة على الهاتف بلا علاقة بجلسة الـ USSD (راجع النقاش السابق).
+            // false هنا (بما فيها حالة عدم توفر الخدمة إطلاقاً) تعني: لا يمكن تأكيد الإغلاق من هنا،
+            // فمن المعقول أن يلجأ الطرف الخارجي لبديله الاحتياطي الخاص.
+            val dismissedCleanly = UssdAccessibilityService.instance?.performPendingActionsDirectly() ?: false
+
+            return jsonResponse(
+                Response.Status.OK,
+                JSONObject().put("ok", true).put("dismissedCleanly", dismissedCleanly)
+            )
         }
 
         private fun handleSmsList(session: IHTTPSession): Response {
