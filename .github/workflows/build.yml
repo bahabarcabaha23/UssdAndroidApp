@@ -25,11 +25,16 @@ jobs:
         with:
           gradle-version: 8.1.1
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        working-directory: ussd-companion
+
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
+        working-directory: ussd-companion
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ussd-companion-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ussd-companion/app/build/outputs/apk/debug/app-debug.apk
