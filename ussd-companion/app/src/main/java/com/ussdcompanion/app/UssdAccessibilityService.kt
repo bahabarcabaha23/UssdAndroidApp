@@ -57,7 +57,10 @@ class UssdAccessibilityService : AccessibilityService() {
         private val BALANCE_VALUE_PATTERN = Regex("""(\d+[.,]?\d*)\s*(DA|دج)""", RegexOption.IGNORE_CASE)
 
         private const val BALANCE_SMS_WAIT_MS = 40_000L
-        private const val SMS_POLL_INTERVAL_MS = 2_000L
+        // ⚡ PERF: تم تسريع فحص الرسائل من 2000ms إلى 500ms للاستجابة الفورية
+        private const val SMS_POLL_INTERVAL_MS = 500L
+        // ⚡ PERF: تقليل مدة الانتظار من 2500ms إلى 1200ms واستخدامه بشكل شرطي
+        private const val FINALIZE_SETTLE_MS = 1200L
 
         // 🛡️ حزمة "android" عامة جداً وتُستخدم أيضاً لنوافذ الأذونات وتنبيهات النظام العادية
         // (غير متعلقة بالـ USSD إطلاقاً). نقبل نوافذ هذه الحزمة فقط إن لم تحتوِ إحدى هذه الكلمات
@@ -210,16 +213,36 @@ class UssdAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // نهائي
-            UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
-            ActivityLog.add("رد USSD (نهائي): $text")
-
             val dismissButton = findDismissButton(root)
             if (dismissButton != null) {
+                // ⚡ PERF: الزر متوفر، لا نطبق أي debounce، إغلاق وتأكيد فوري
+                UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
+                ActivityLog.add("رد USSD (نهائي): $text")
+                
                 val clicked = dismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً" else "تعذّر النقر التلقائي على زر الإغلاق")
             } else {
-                ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
+                // ⚡ PERF: الزر غير متوفر، ننتظر FINALIZE_SETTLE_MS قبل التأكيد لتجنب مشاكل التحميل
+                ActivityLog.add("رد USSD (نهائي) - بانتظار $FINALIZE_SETTLE_MS ms لتأكيد النافذة")
+                Thread.sleep(FINALIZE_SETTLE_MS)
+                
+                // إعادة قراءة الشاشة بعد الانتظار
+                val finalRoot = rootInActiveWindow ?: root
+                val finalDismissButton = findDismissButton(finalRoot)
+                val finalTextSb = java.lang.StringBuilder()
+                collectText(finalRoot, finalTextSb)
+                val finalText = finalTextSb.toString().trim()
+                val resultText = if (finalText.isNotEmpty()) finalText else text
+                
+                UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, resultText)
+                ActivityLog.add("رد USSD (نهائي بعد الانتظار): $resultText")
+                
+                if (finalDismissButton != null) {
+                    val clicked = finalDismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً بعد الانتظار" else "تعذّر النقر التلقائي على زر الإغلاق")
+                } else {
+                    ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
+                }
             }
         }
     }
