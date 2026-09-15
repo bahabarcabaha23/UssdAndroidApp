@@ -4,8 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
@@ -38,33 +36,24 @@ class UssdAccessibilityService : AccessibilityService() {
             "exécution du code ussd",
             "execution du code ussd",
             "رمز ussd قيد التشغيل",
-            "يتم تشغيل رمز ussd",
-            // 🆕 رسائل شبكة عابرة حقيقية (مشاكل اتصال مؤقتة تُعقَب عادة بمحاولة تلقائية من الشبكة
-            // نفسها خلال ثوانٍ) - بلا أي نقر أو إغلاق تلقائي، فقط تُسجَّل ويُستمر بالانتظار (تماماً
-            // كنوافذ التحميل)، ومهلة PENDING الحالية (30 ثانية) تبقى صمام الأمان النهائي إن لم يصل
-            // أي رد فعلي بعدها. ⚠️ هذه منفصلة تماماً عن مشكلة "لا يوجد عرض لهذا الرقم" (تلك تُعالَج
-            // عبر FINALIZE_SETTLE_MS أدناه لأنها نص نهائي المظهر وليست رسالة خطأ معروفة).
-            "problème de connexion",
-            "probleme de connexion",
-            "code ihm non valide",
-            "code ihm",
-            "invalid mmi",
-            "connection problem",
-            "مشكلة في الاتصال",
-            "رمز mmi"
+            "يتم تشغيل رمز ussd"
         )
 
-        // ⚠️ نمط التعرف على "إشعار الرصيد سيصل عبر SMS" (مثل بعض حالات استعلام رصيد موبيليس)
+        // ⚠️ نمط تقريبي للتعرف على "إشعار الرصيد سيصل عبر SMS" (استعلام رصيد موبيليس).
+        // لم يُتوفّر لدي نص الرسالة الحقيقي بعد - اضبط هذا النمط بدقة بمجرد تنفيذ طلب رصيد فعلي
+        // ومراجعة نص الرد الذي سيظهر في سجل الأحداث تحت "رد USSD (نهائي):" قبل هذا التعديل.
         private val BALANCE_VIA_SMS_PATTERN = Regex(
-            """(?:(?:par|via|dans\s*un|recevrez\s*un|envoy[eé]\s*par|عبر|في)\s*sms)|(?:sms\s*(?:vous\s*sera|envoy[eé]|يصلك|ستصلك))|(?:(?:solde|cr[ée]dit|رصيد).{0,50}(?:par\s*sms|via\s*sms|عبر\s*sms|عبر\s*رسالة))""",
+            "(solde|crédit|credit|رصيد).{0,80}(sms)|(sms).{0,80}(solde|crédit|credit|رصيد)",
             RegexOption.IGNORE_CASE
         )
-        // استثناء متعمّد: رسائل التعبئة أو عروض المكالمات/الرسائل (مثل VOICE/SMS)
+        // استثناء متعمّد: رسالة تأكيد التعبئة "Votre demande est prise en charge, un sms vous sera
+        // envoyé" تحتوي أيضاً على كلمة sms، لكنها تخص تدفّق التعبئة (تُعالَج في C# بآلية منفصلة بالفعل)
+        // وليست استعلام رصيد - يجب ألا تدخل هذا المسار الجديد إطلاقاً.
         private val RECHARGE_NOTIFICATION_EXCLUSIONS = Regex(
-            "recharger|recharge|prise en charge|transaction|transferer|transférer|voice/sms|voice / sms",
+            "recharger|recharge|prise en charge|transaction|transferer|transférer",
             RegexOption.IGNORE_CASE
         )
-        // نمط استخراج قيمة الرصيد من نص رسالة الـ SMS أو رد الـ USSD (مبلغ متبوع بـ DA أو دج)
+        // نمط استخراج قيمة الرصيد من نص رسالة الـ SMS الواردة (مبلغ متبوع بـ DA أو دج)
         private val BALANCE_VALUE_PATTERN = Regex("""(\d+[.,]?\d*)\s*(DA|دج)""", RegexOption.IGNORE_CASE)
 
         private const val BALANCE_SMS_WAIT_MS = 40_000L
@@ -83,24 +72,7 @@ class UssdAccessibilityService : AccessibilityService() {
         // واحدة إن ظهرت نوافذ كثيرة من نفس التطبيق غير المتوقّع.
         private val lastUnmatchedPackageLogTime = ConcurrentHashMap<String, Long>()
         private const val UNMATCHED_PACKAGE_LOG_THROTTLE_MS = 5_000L
-
-        // 🆕 إصلاح: مهلة استقرار قبل اعتماد أي نص كـ"رد USSD نهائي" فعلي. لوحظ ميدانياً (سجل
-        // مستخدم، عملية "جلب العروض") أن بعض تدفقات الشبكة تُظهر نصاً أولياً فورياً بلا أي مؤشر
-        // تحميل (مثل "لا يوجد عرض لهذا الرقم...")، ثم تستبدله فعلياً بعد ~1-2 ثانية بالرد الحقيقي
-        // عبر تحديث محتوى نفس النافذة (TYPE_WINDOW_CONTENT_CHANGED). الاعتماد الفوري على أول نص
-        // بلا مؤشر تحميل كان يجعل البرنامج (C#) يقرأ النص الأولي الخاطئ ويُنهي الجلسة (بما فيه
-        // استدعاء /ussd/dismiss) قبل وصول الرد الحقيقي، فتظهر النتيجة الفعلية على شاشة الهاتف فقط
-        // دون أي تسليم لها - راجع handleCandidateFinalText لتفاصيل الآلية. القيمة هنا فيها هامش
-        // أمان فوق الـ2 ثانية المُلاحَظة ميدانياً؛ عدّلوها لاحقاً حسب اختبارات ميدانية إضافية إن
-        // ظهرت حالات أبطأ من هذا (مثلاً شبكة أضعف).
-        const val FINALIZE_SETTLE_MS = 1000L
     }
-
-    // حالة "المرشّح النهائي" الحالي بانتظار الاستقرار - راجع handleCandidateFinalText
-    @Volatile private var candidateFinalText: String? = null
-    @Volatile private var candidateFinalRequestId: String? = null
-    @Volatile private var candidateFinalFirstSeenAt: Long = 0L
-    private val settleHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -108,29 +80,17 @@ class UssdAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        settleHandler.removeCallbacksAndMessages(null)
         instance = null
         super.onDestroy()
     }
 
-    /**
-     * @return true إن لم يكن هناك طلب إغلاق معلّق أصلاً، أو تم إغلاق الحوار فعلاً (بنقر ناجح أو
-     * لأنه لم يعد ظاهراً أصلاً - أي أُغلق مسبقاً). false فقط حين طُلب الإغلاق صراحة ولا يزال هناك
-     * حوار USSD/اتصال ظاهر فعلياً على الشاشة ولم يُعثر على أي زر مناسب فيه - هذه هي الحالة الوحيدة
-     * التي يستحق فيها المتصل (HttpServerService → androidPhoneService.ts) اللجوء لبديل خارجي
-     * (كضغط زر الرجوع عبر ADB). بلا هذا التمييز، أي طلب /ussd/dismiss يصل بعد إغلاق ناجح تلقائي
-     * (عبر finalizeUssdResponse مثلاً) سيُقرأ خطأً كـ"فشل" لمجرد عدم وجود أي زر ليُنقر عليه بعد
-     * الآن - رغم أن الجلسة أُغلقت بنجاح فعلاً - فيُفعَّل بديل ADB بلا داعٍ في كل عملية ناجحة.
-     */
-    fun performPendingActionsDirectly(): Boolean {
+    fun performPendingActionsDirectly() {
         val root = rootInActiveWindow
         if (root == null) {
             ActivityLog.add("[إدخال] فشل: لا توجد نافذة نشطة (rootInActiveWindow == null)")
-            // لا يمكن التأكد من أي شيء بلا نافذة نشطة - نُبقي الاحتمال مفتوحاً لبديل خارجي فقط
-            // إن كان هناك فعلاً طلب إغلاق معلّق (وإلا لا داعي لإخبار المتصل بأي "فشل").
-            return !UssdSessionState.dismissRequested
+            return
         }
-        return applyPendingActions(root)
+        applyPendingActions(root)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -219,13 +179,6 @@ class UssdAccessibilityService : AccessibilityService() {
 
         if (isSystemMessage || isLoadingProgress) {
             ActivityLog.add("تم تجاهل نافذة تحميل مؤقتة بانتظار الرد الفعلي من الشبكة.")
-            if (isSystemMessage) {
-                val dismissBtn = findDismissButton(root)
-                if (dismissBtn != null) {
-                    val clicked = dismissBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    if (clicked) ActivityLog.add("تم إغلاق رسالة النظام العابرة تلقائياً")
-                }
-            }
             return 
         }
 
@@ -239,13 +192,7 @@ class UssdAccessibilityService : AccessibilityService() {
             }
             return
         } else {
-            // 🟢 إذا كان النص يحتوي بالفعل على رقم الرصيد بالدينار (مثل "Crédit : 78.08DA" أو "500 DA" أو "رصيد: 100 دج")،
-            // فهذا رد نهائي مباشر ويجب ألا يُحوّل لانتظار SMS إطلاقاً!
-            val hasDirectBalanceValue = BALANCE_VALUE_PATTERN.containsMatchIn(text) ||
-                Regex("""(?:cr[ée]dit|solde|رصيد)[^\d]*?\d+""", RegexOption.IGNORE_CASE).containsMatchIn(text)
-
-            val looksLikeBalanceViaSms = !hasDirectBalanceValue &&
-                BALANCE_VIA_SMS_PATTERN.containsMatchIn(text) &&
+            val looksLikeBalanceViaSms = BALANCE_VIA_SMS_PATTERN.containsMatchIn(text) &&
                 !RECHARGE_NOTIFICATION_EXCLUSIONS.containsMatchIn(text)
 
             if (looksLikeBalanceViaSms) {
@@ -263,90 +210,17 @@ class UssdAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // 🆕 مرشّح نهائي فقط - لا نعتمده فوراً ولا نُغلق النافذة الآن. راجع التوثيق أعلى
-            // handleCandidateFinalText: قد يكون هذا النص أولياً مؤقتاً سيُستبدل خلال لحظات
-            // بالرد الحقيقي (لوحظ ميدانياً في تدفق "جلب العروض").
-            handleCandidateFinalText(text)
-        }
-    }
+            // نهائي
+            UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
+            ActivityLog.add("رد USSD (نهائي): $text")
 
-    // =========================================================
-    // 🆕 إصلاح: إنهاء متسرّع لجلسة USSD قبل استقرار النص الحقيقي
-    // =========================================================
-    // خلفية المشكلة (من سجل أحداث مستخدم فعلي، عملية "جلب العروض"): فور إرسال كود USSD، ظهرت
-    // نافذة النظام بنص فوري ("لا يوجد عرض لهذا الرقم...") بلا أي ProgressBar وبلا أي عبارة من
-    // IGNORED_SYSTEM_MESSAGES، فاعتمده المنطق القديم فوراً كرد "نهائي" وأغلق النافذة. لكن بعد
-    // نحو 1-2 ثانية، استُبدل هذا النص فعلياً بالعروض الحقيقية عبر تحديث محتوى النافذة. بما أن
-    // الجلسة كانت قد أُنهيت (وربما استُدعي /ussd/dismiss/ من C# بعدها فوراً)، فإن
-    // onAccessibilityEvent يتجاهل ذلك التحديث اللاحق تماماً (`if (status == IDLE) return`)،
-    // فتظهر العروض الحقيقية على شاشة الهاتف فقط دون أي وصول للبرنامج.
-    //
-    // الحل: لا يُعتمَد أي نص كـ"نهائي" فور ظهوره، بل يُسجَّل كـ"مرشّح" وتُمنح له مهلة استقرار
-    // (FINALIZE_SETTLE_MS) دون أي إنهاء للجلسة أو نقر تلقائي على زر الإغلاق خلالها:
-    //   - إن وصل نص مختلف قبل انتهاء المهلة (تحديث حقيقي جديد)، يُعاد ضبط المهلة على النص
-    //     الجديد فوراً ولا شيء يُفقَد.
-    //   - فقط إن بقي نفس النص مستقراً طوال المهلة كاملة، يُعتمَد كرد نهائي فعلي وتُغلق النافذة.
-    // الأثر الجانبي المقصود: كل رد USSD يتأخر تسليمه بمقدار المهلة تقريباً - تكلفة مقبولة مقابل
-    // تفادي فقدان الرد الحقيقي بالكامل.
-    private fun handleCandidateFinalText(text: String) {
-        val requestId = UssdSessionState.currentRequestId
-        val now = System.currentTimeMillis()
-
-        if (text != candidateFinalText || requestId != candidateFinalRequestId) {
-            candidateFinalText = text
-            candidateFinalRequestId = requestId
-            candidateFinalFirstSeenAt = now
-            ActivityLog.add("رد USSD (مرشّح - بانتظار استقرار ${FINALIZE_SETTLE_MS / 1000.0} ث): $text")
-            settleHandler.removeCallbacksAndMessages(null)
-            settleHandler.postDelayed({ recheckCandidateFinal(text, requestId) }, FINALIZE_SETTLE_MS)
-            return
-        }
-
-        // نفس النص وصل مجدداً لنفس الجلسة، والمهلة انقضت فعلاً (مثلاً وصل حدث إضافي بعد انتهاء
-        // المهلة المجدوَلة أصلاً) - اعتمده نهائياً الآن دون انتظار postDelayed لا لزوم له.
-        if (now - candidateFinalFirstSeenAt >= FINALIZE_SETTLE_MS) {
-            finalizeUssdResponse(text)
-        }
-    }
-
-    /** يُنفَّذ بعد FINALIZE_SETTLE_MS من ظهور نص "مرشّح" لأول مرة، للتحقق من استقراره فعلاً قبل اعتماده. */
-    private fun recheckCandidateFinal(expectedText: String, expectedRequestId: String?) {
-        if (UssdSessionState.currentRequestId != expectedRequestId) return
-        // 🆕 إن انتقلت الجلسة فعلاً لانتظار إدخال حقيقي (مثلاً قائمة عروض وصلت بعد النص الوسيط
-        // الخاطئ - راجع الحالة الموثّقة ميدانياً: نص "لا يوجد عرض" يليه حوار عروض حقيقي بحقل
-        // إدخال)، يجب عدم الكتابة فوقها بالمرشّح القديم المنتهي الصلاحية إطلاقاً.
-        if (UssdSessionState.status == UssdSessionState.STATUS_COMPLETED ||
-            UssdSessionState.status == UssdSessionState.STATUS_WAITING_SMS_BALANCE ||
-            UssdSessionState.status == UssdSessionState.STATUS_WAITING_USER_INPUT ||
-            UssdSessionState.status == UssdSessionState.STATUS_IDLE
-        ) return
-        // المرشّح تغيّر بالفعل (وصل تحديث حقيقي جديد استبدله) - له مهلته الخاصة المجدوَلة من
-        // handleCandidateFinalText أصلاً؛ لا شيء نفعله هنا.
-        if (candidateFinalText != expectedText || candidateFinalRequestId != expectedRequestId) return
-
-        val root = rootInActiveWindow ?: return
-        val currentText = StringBuilder().also { collectText(root, it) }.toString().trim()
-        if (currentText == expectedText) {
-            finalizeUssdResponse(expectedText)
-        }
-        // إن اختلف النص الحالي عن المتوقَّع، فهذا يعني أن حدث تغيّر محتوى وصل فعلاً وأعاد ضبط
-        // مرشّح جديد من مساره الطبيعي في onAccessibilityEvent - لا حاجة لفعل شيء هنا.
-    }
-
-    private fun finalizeUssdResponse(text: String) {
-        candidateFinalText = null
-        candidateFinalRequestId = null
-
-        UssdSessionState.updateStatus(UssdSessionState.STATUS_COMPLETED, text)
-        ActivityLog.add("رد USSD (نهائي): $text")
-
-        val root = rootInActiveWindow
-        val dismissButton = root?.let { findDismissButton(it) }
-        if (dismissButton != null) {
-            val clicked = dismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً" else "تعذّر النقر التلقائي على زر الإغلاق")
-        } else {
-            ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
+            val dismissButton = findDismissButton(root)
+            if (dismissButton != null) {
+                val clicked = dismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً" else "تعذّر النقر التلقائي على زر الإغلاق")
+            } else {
+                ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
+            }
         }
     }
 
@@ -426,8 +300,7 @@ class UssdAccessibilityService : AccessibilityService() {
         return "${match.groupValues[1]} ${match.groupValues[2].uppercase()}"
     }
 
-    /** @return انظر توثيق [performPendingActionsDirectly] لمعنى القيمة المُعادة بدقة. */
-    private fun applyPendingActions(root: AccessibilityNodeInfo): Boolean {
+    private fun applyPendingActions(root: AccessibilityNodeInfo) {
         val toSend = UssdSessionState.pendingInputToSend.getAndSet(null)
         if (toSend != null) {
             val field = findEditText(root)
@@ -458,24 +331,12 @@ class UssdAccessibilityService : AccessibilityService() {
             }
         }
 
-        if (!UssdSessionState.dismissRequested) return true
-
-        // 🆕 التمييز الحاسم: هل لا تزال هناك نافذة USSD/اتصال ظاهرة فعلياً تستحق إغلاقاً، أم أن
-        // الشاشة انتقلت أصلاً لشيء آخر (غالباً لأن الحوار أُغلق بنجاح مسبقاً عبر finalizeUssdResponse
-        // التلقائي)؟ إن لم يعد هناك حوار من هذا النوع أصلاً، هذا "نجاح" وليس "فشل" - رغم عدم وجود
-        // أي زر لنقره الآن - فلا يجدر إخبار المتصل (TS/C#) بفشل يدفعه للجوء لبديل ADB بلا داعٍ.
-        val stillOnTelephonyDialog = isTelephonyRelatedWindow(root, root.packageName?.toString()?.lowercase() ?: "")
-        val dismissedSuccessfully = if (!stillOnTelephonyDialog) {
-            ActivityLog.add("طلب إغلاق: لا يوجد حوار USSD ظاهر حالياً - اعتُبر مُغلقاً بالفعل")
-            true
-        } else {
+        if (UssdSessionState.dismissRequested) {
             val closeBtn = findDismissButton(root)
             val clicked = closeBtn?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
             ActivityLog.add(if (clicked) "تم إغلاق حوار USSD بطلب من البرنامج" else "طلب إغلاق لكن لم يُعثر على زر مناسب")
-            clicked
+            UssdSessionState.reset()
         }
-        UssdSessionState.reset()
-        return dismissedSuccessfully
     }
 
     // 🟢 التحقق المادي من وجود مؤشر تحميل (ProgressBar)
