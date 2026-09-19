@@ -33,6 +33,15 @@ object UssdSessionState {
     const val WAITING_INPUT_TIMEOUT_MS = 60_000L
     private const val WAITING_INPUT_TIMEOUT_SEC = WAITING_INPUT_TIMEOUT_MS / 1000
 
+    // 🆕 شبكة أمان أخيرة لحالة COMPLETED: الافتراض الطبيعي أن الطرف الخارجي (C#/androidPhoneService.ts)
+    // يقرأ الرد عبر /ussd/response ثم يستدعي /ussd/dismiss فيتحرر الجهاز. لكن لو تعطّل ذلك لأي سبب
+    // (تعطل ذلك الطرف، انقطاع شبكة adb forward بين الاستدعاء والرد، أو فشل
+    // UssdAccessibilityService.performPendingActionsDirectly في إيجاد نافذة نشطة لينقر عليها فيتخطى
+    // استدعاء reset() - وهي الحالة الفعلية التي كانت تُسبب "device busy" رغم أن الهاتف غير مشغول
+    // فعلاً)، هذه المهلة تُعيد الجهاز تلقائياً لحالة IDLE دون انتظار أي استدعاء خارجي إطلاقاً.
+    const val COMPLETED_TIMEOUT_MS = 20_000L
+    private const val COMPLETED_TIMEOUT_SEC = COMPLETED_TIMEOUT_MS / 1000
+
     @Volatile var currentRequestId: String? = null
     @Volatile var status: String = STATUS_IDLE
         private set
@@ -55,6 +64,8 @@ object UssdSessionState {
             armPendingTimeoutWatchdog(currentRequestId)
         } else if (newStatus == STATUS_WAITING_USER_INPUT) {
             armWaitingInputTimeoutWatchdog(currentRequestId)
+        } else if (newStatus == STATUS_COMPLETED) {
+            armCompletedTimeoutWatchdog(currentRequestId)
         }
     }
 
@@ -128,6 +139,31 @@ object UssdSessionState {
                 if (status == STATUS_WAITING_USER_INPUT) {
                     reset()
                 }
+            }
+        }.start()
+    }
+
+    /**
+     * يراقب في خيط خلفي أن لا تبقى الجلسة عالقة في COMPLETED إلى الأبد بانتظار استدعاء
+     * /ussd/dismiss من الطرف الخارجي الذي قد لا يصل أبداً لأي سبب (تعطل ذلك الطرف، انقطاع شبكة
+     * adb forward، أو فشل performPendingActionsDirectly تحديداً في إيجاد نافذة نشطة فيتخطى
+     * استدعاء reset()). عند انتهاء المهلة دون أي تقدّم لنفس requestId، تُحرَّر الجلسة تلقائياً -
+     * بدل أن تبقى تحجب أي طلب USSD جديد بـ"device busy" رغم أن الهاتف غير مشغول فعلياً.
+     */
+    private fun armCompletedTimeoutWatchdog(requestId: String?) {
+        if (requestId == null) return
+        Thread {
+            try {
+                Thread.sleep(COMPLETED_TIMEOUT_MS)
+            } catch (e: InterruptedException) {
+                return@Thread
+            }
+            if (currentRequestId == requestId && status == STATUS_COMPLETED) {
+                ActivityLog.add(
+                    "تحرير تلقائي للجهاز بعد $COMPLETED_TIMEOUT_SEC ث من اكتمال الرد دون استدعاء " +
+                        "/ussd/dismiss من الطرف الخارجي"
+                )
+                reset()
             }
         }.start()
     }
