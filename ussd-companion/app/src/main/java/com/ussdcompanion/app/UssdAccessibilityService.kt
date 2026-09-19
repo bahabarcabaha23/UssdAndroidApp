@@ -91,6 +91,21 @@ class UssdAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow
         if (root == null) {
             ActivityLog.add("[إدخال] فشل: لا توجد نافذة نشطة (rootInActiveWindow == null)")
+            // 🆕 إصلاح جذري لعطل "device busy" الوهمي: applyPendingActions (وبالتالي
+            // UssdSessionState.reset()) لم يكن يُستدعى إطلاقاً هنا لو أُغلق حوار الـ USSD من
+            // تلقاء نفسه قبل وصول استدعاء /ussd/dismiss (وهو الحال الشائع فعلاً بعد رد ناجح) -
+            // فتبقى الجلسة عالقة على غير IDLE للأبد، ويُرفض أي طلب USSD جديد بـ"device busy" رغم
+            // أن الهاتف غير مشغول فعلياً، ودون أي فرصة للتعافي التلقائي لاحقاً: أي محاولة تالية
+            // تُرفض من HttpServerService قبل حتى استدعاء ACTION_CALL، فلا يظهر أي حدث نافذة
+            // هاتف جديد يُعيد تشغيل applyPendingActions من onAccessibilityEvent. بما أن عدم وجود
+            // نافذة نشطة يعني غالباً أن الحوار مغلق أصلاً (لا شيء لنقره على أي حال)، وبما أن طلب
+            // الإغلاق (dismissRequested) صريح من الطرف الخارجي، فتحرير الجهاز هنا أهم من انتظار
+            // نافذة قد لا تظهر إطلاقاً - بنفس فلسفة "أولوية التحرير على دقة الإغلاق المرئي" في
+            // armWaitingInputTimeoutWatchdog (UssdSessionState.kt).
+            if (UssdSessionState.dismissRequested) {
+                ActivityLog.add("تحرير الجلسة رغم عدم وجود نافذة نشطة (الحوار مغلق أصلاً على الأرجح)")
+                UssdSessionState.reset()
+            }
             return
         }
         applyPendingActions(root)
