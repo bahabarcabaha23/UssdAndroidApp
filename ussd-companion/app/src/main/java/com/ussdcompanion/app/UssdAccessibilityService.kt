@@ -432,3 +432,100 @@ class UssdAccessibilityService : AccessibilityService() {
             } catch (e: Exception) {
                 null
             }
+            if (found != null) return found
+        }
+
+        findButtonByText(root, DISMISS_BUTTON_TEXTS)?.let { return it }
+
+        val buttons = mutableListOf<AccessibilityNodeInfo>()
+        collectButtons(root, buttons)
+        if (buttons.size == 1) return buttons[0]
+
+        return null
+    }
+
+    private fun collectButtons(node: AccessibilityNodeInfo, out: MutableList<AccessibilityNodeInfo>) {
+        if (node.className == "android.widget.Button") out.add(node)
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectButtons(child, out)
+        }
+    }
+
+    private fun collectText(node: AccessibilityNodeInfo, out: StringBuilder) {
+        node.text?.let { if (it.isNotBlank()) out.append(it).append(" ") }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectText(child, out)
+        }
+    }
+
+    private fun findEditText(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        // 🆕 مقارنة className الحرفية الصارمة تفشل مع أي فئة فرعية (شائعة على واجهات المصنّعين
+        // المخصصة مثل EMUI/One UI) - نعتمد أساساً على isEditable (علامة دلالية حقيقية من نظام
+        // الوصول لا تتأثر باسم الفئة الدقيق) مع إبقاء فحص className كطبقة احتياطية إضافية فقط.
+        val cls = node.className?.toString() ?: ""
+        if (node.isEditable || cls == "android.widget.EditText" || cls.endsWith(".EditText")) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findEditText(child)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    // 🆕 يزيل علامات الاتجاه الخفية (LRM/RLM/ALM) التي يُدرجها أندرويد أحياناً ضمن نصوص تخلط
+    // عربي/فرنسي، وكانت تُفشل مقارنة النص الحرفية صامتة حتى لو بدا النصان متطابقين في السجلّ.
+    private fun normalizeNodeText(raw: CharSequence?): String? {
+        if (raw == null) return null
+        val cleaned = raw.toString()
+            .replace("\u200E", "").replace("\u200F", "").replace("\u061C", "")
+            .trim()
+        return cleaned.ifEmpty { null }
+    }
+
+    // 🆕 العقدة التي تحمل النص المطابق ليست بالضرورة هي العقدة القابلة للنقر فعلياً (isClickable
+    // غالباً ما يحملها حاوٍ أب أقرب) - النقر المباشر على عقدة نص غير قابلة للنقر يفشل صامتاً
+    // (performAction يُرجع false) فيبقى الحوار مفتوحاً على الشاشة رغم أن السجلّ يقول "تم العثور
+    // على الزر". نصعد حتى 6 مستويات بحثاً عن أقرب سلف قابل للنقر فعلياً.
+    private fun findClickableAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var current: AccessibilityNodeInfo? = node
+        var depth = 0
+        while (current != null && depth < 6) {
+            if (current.isClickable) return current
+            current = current.parent
+            depth++
+        }
+        return null
+    }
+
+    private fun findButtonByText(node: AccessibilityNodeInfo, options: List<String>): AccessibilityNodeInfo? {
+        val nodeText = normalizeNodeText(node.text) ?: normalizeNodeText(node.contentDescription)
+        if (nodeText != null && options.any { nodeText.equals(it, ignoreCase = true) }) {
+            return if (node.isClickable) node else (findClickableAncestor(node) ?: node)
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findButtonByText(child, options)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    // 🆕 يتحقق من وجود زوج "إرسال/متابعة" + "إلغاء" واضح وغير ملتبس (باستثناء "OK/موافق" العامة
+    // المشتركة مع حوارات نهائية بزر واحد) ضمن نفس النافذة - هذا هو التوقيع المعتاد لمرحلة تحتاج
+    // قراراً بالمتابعة أو الإلغاء، سواء كان معها حقل نصي أم لا. راجع الاستخدام في
+    // handlePossibleUssdDialog.
+    private fun hasSendCancelButtonPair(root: AccessibilityNodeInfo): Boolean {
+        val buttons = mutableListOf<AccessibilityNodeInfo>()
+        collectButtons(root, buttons)
+        val texts = buttons.mapNotNull { normalizeNodeText(it.text) ?: normalizeNodeText(it.contentDescription) }
+        val hasSend = texts.any { t -> SEND_ONLY_TEXTS.any { opt -> t.equals(opt, ignoreCase = true) } }
+        val hasCancel = texts.any { t -> CANCEL_ONLY_TEXTS.any { opt -> t.equals(opt, ignoreCase = true) } }
+        return hasSend && hasCancel
+    }
+
+    override fun onInterrupt() {
+        ActivityLog.add("تم إيقاف خدمة الوصول")
+    }
+}
