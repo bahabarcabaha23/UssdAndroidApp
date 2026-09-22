@@ -26,6 +26,15 @@ class UssdAccessibilityService : AccessibilityService() {
             "Send", "SEND", "إرسال", "موافق", "OK",
             "ENVOYER", "Envoyer", "envoyer"
         )
+        // 🆕 نصوص مقصورة على "متابعة/إرسال" فقط (بدون "OK/موافق" الملتبسة التي تظهر أيضاً في
+        // حوارات نهائية بزر واحد)، ومثلها لـ"إلغاء" فقط. تُستخدم معاً في hasSendCancelButtonPair
+        // للتعرف على مرحلة "تأكيد بزوج أزرار إرسال/إلغاء بلا أي حقل نصي" وعدم معاملتها كرد نهائي.
+        private val SEND_ONLY_TEXTS = listOf(
+            "Send", "SEND", "إرسال", "ENVOYER", "Envoyer", "envoyer"
+        )
+        private val CANCEL_ONLY_TEXTS = listOf(
+            "Cancel", "CANCEL", "إلغاء", "ANNULER", "Annuler", "annuler"
+        )
         private val STANDARD_DIALOG_BUTTON_IDS = listOf(
             "android:id/button1", "android:id/button2", "android:id/button3"
         )
@@ -201,12 +210,26 @@ class UssdAccessibilityService : AccessibilityService() {
         }
 
         val hasInputField = findEditText(root) != null
+        // 🆕 إصلاح عطل "أكثر من مرحلتين": بعض مراحل تأكيد شراء العروض تصل بلا أي حقل نصي
+        // (EditText) إطلاقاً - فقط رسالة مع زرّي إرسال/إلغاء (ENVOYER/ANNULER) يجب الضغط على
+        // أحدهما للمتابعة للمرحلة التالية. الكود القديم كان يفترض دائماً أن غياب EditText يعني
+        // "رد نهائي" فيُغلق الحوار فوراً (وأحياناً بالضغط الخاطئ على "إلغاء" لو فشل البحث
+        // بالمعرّف القياسي android:id/buttonN وسقط للبحث النصي) قبل أن يصل الطرف الخارجي
+        // (C#/androidPhoneService.ts) أصلاً لإرسال كود التأكيد - فتُرجع الحالة "device busy" لطلبه
+        // (لأن الحالة انتقلت من WAITING_USER_INPUT إلى COMPLETED من تلقاء نفسها)، ويبقى الحوار
+        // الحقيقي مفتوحاً على الشاشة لو فشل النقر التلقائي - يمنع أي عملية تالية. الحل: أي نافذة
+        // تحمل زوج أزرار إرسال+إلغاء واضح بلا لبس تُعامَل كمرحلة "بانتظار تأكيد" تماماً كحال وجود
+        // EditText، لا كرد نهائي.
+        val hasSendCancelPair = hasSendCancelButtonPair(root)
 
-        if (hasInputField) {
-            // بانتظار إدخال
+        if (hasInputField || hasSendCancelPair) {
+            // بانتظار إدخال أو تأكيد (بضغطة زر فقط بلا حقل نصي)
             if (UssdSessionState.status != UssdSessionState.STATUS_WAITING_USER_INPUT || UssdSessionState.message != text) {
                 UssdSessionState.updateStatus(UssdSessionState.STATUS_WAITING_USER_INPUT, text)
-                ActivityLog.add("رد USSD (بانتظار إدخال): $text")
+                ActivityLog.add(
+                    if (hasInputField) "رد USSD (بانتظار إدخال): $text"
+                    else "رد USSD (بانتظار تأكيد بزر بلا حقل نصي): $text"
+                )
             }
             return
         } else {
@@ -256,7 +279,13 @@ class UssdAccessibilityService : AccessibilityService() {
                     val clicked = finalDismissButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     ActivityLog.add(if (clicked) "تم إغلاق حوار USSD تلقائياً بعد الانتظار" else "تعذّر النقر التلقائي على زر الإغلاق")
                 } else {
-                    ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب")
+                    val diagButtons = mutableListOf<AccessibilityNodeInfo>()
+                    collectButtons(finalRoot, diagButtons)
+                    val diagSummary = diagButtons.joinToString(", ") {
+                        "'${normalizeNodeText(it.text) ?: normalizeNodeText(it.contentDescription) ?: ""}'" +
+                            "(clickable=${it.isClickable}, id=${it.viewIdResourceName})"
+                    }
+                    ActivityLog.add("تم استخراج الرد؛ بانتظار توفر زر إغلاق مناسب - [تشخيص] الأزرار الموجودة: [$diagSummary]")
                 }
             }
         }
@@ -364,8 +393,17 @@ class UssdAccessibilityService : AccessibilityService() {
                 } else if (sendBtn == null) {
                     ActivityLog.add("[إدخال] فشل: لم يُعثر على زر الإرسال (ENVOYER)")
                 }
+            } else if (sendBtn != null) {
+                // 🆕 مرحلة تأكيد بلا حقل نصي إطلاقاً (زر إرسال/متابعة فقط) - النص المُرسَل من
+                // الطرف الخارجي لا معنى له هنا (لا يوجد أين يُكتب)، فقط نضغط زر المتابعة مباشرة
+                // لإكمال هذه المرحلة والانتقال للمرحلة التالية أو الرد النهائي.
+                val clickSuccess = sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                ActivityLog.add("[إدخال] مرحلة تأكيد بلا حقل نصي - نتيجة الضغط على زر المتابعة: $clickSuccess")
+                if (clickSuccess) {
+                    UssdSessionState.updateStatus(UssdSessionState.STATUS_PENDING)
+                }
             } else {
-                ActivityLog.add("[إدخال] فشل: لم يُعثر على حقل الإدخال (EditText)")
+                ActivityLog.add("[إدخال] فشل: لم يُعثر لا على حقل الإدخال (EditText) ولا على زر متابعة")
             }
         }
 
@@ -394,56 +432,3 @@ class UssdAccessibilityService : AccessibilityService() {
             } catch (e: Exception) {
                 null
             }
-            if (found != null) return found
-        }
-
-        findButtonByText(root, DISMISS_BUTTON_TEXTS)?.let { return it }
-
-        val buttons = mutableListOf<AccessibilityNodeInfo>()
-        collectButtons(root, buttons)
-        if (buttons.size == 1) return buttons[0]
-
-        return null
-    }
-
-    private fun collectButtons(node: AccessibilityNodeInfo, out: MutableList<AccessibilityNodeInfo>) {
-        if (node.className == "android.widget.Button") out.add(node)
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            collectButtons(child, out)
-        }
-    }
-
-    private fun collectText(node: AccessibilityNodeInfo, out: StringBuilder) {
-        node.text?.let { if (it.isNotBlank()) out.append(it).append(" ") }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            collectText(child, out)
-        }
-    }
-
-    private fun findEditText(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (node.className == "android.widget.EditText") return node
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val found = findEditText(child)
-            if (found != null) return found
-        }
-        return null
-    }
-
-    private fun findButtonByText(node: AccessibilityNodeInfo, options: List<String>): AccessibilityNodeInfo? {
-        val nodeText = node.text?.toString()
-        if (nodeText != null && options.any { nodeText.equals(it, ignoreCase = true) }) return node
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val found = findButtonByText(child, options)
-            if (found != null) return found
-        }
-        return null
-    }
-
-    override fun onInterrupt() {
-        ActivityLog.add("تم إيقاف خدمة الوصول")
-    }
-}
